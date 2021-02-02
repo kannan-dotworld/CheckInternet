@@ -1,74 +1,42 @@
 package dev.dotworld.checkinternet
 
-import android.content.BroadcastReceiver
-import android.content.Context
+
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.work.PeriodicWorkRequest
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
-
+private val callBackAction: String = "call_back_ui"
 class MainActivity : AppCompatActivity() {
     private var TAG = MainActivity::class.java.simpleName
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
+        Log.d(TAG, "onCreate: ")
         val intentFilter = IntentFilter()
         intentFilter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
         intentFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
-        intentFilter.addAction(WifiManager.EXTRA_NETWORK_INFO)
+        intentFilter.addAction(WifiManager.EXTRA_WIFI_STATE)
+        intentFilter.addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
         intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION)
-        registerReceiver(isWifiMode, intentFilter)
+        intentFilter.addAction(callBackAction)
+        registerReceiver(NetworkBrodcastReceiver(), intentFilter)
+
+        val periodicWorkRequest:PeriodicWorkRequest =PeriodicWorkRequest.Builder(NetworkWorkManager::class.java,15,TimeUnit.MINUTES)
+            .build()
+        WorkManager.getInstance(this).enqueue(periodicWorkRequest)
 
     }
 
-
-    private val isWifiMode: BroadcastReceiver = object : BroadcastReceiver() {
-        @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-        override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d(TAG, "isNetworkAvailable: " + isNetworkAvailable())
-
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-     fun isNetworkAvailable(): Boolean {
-        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            Log.d(TAG, "Build.VERSION.SDK_INT: ")
-            val capabilities =
-                connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-            if (capabilities != null) {
-                if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-                    return true
-                } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                    return true
-                } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
-                    return true
-                }
-            }
-        } else {
-            try {
-                val activeNetworkInfo = connectivityManager.activeNetworkInfo
-                if (activeNetworkInfo != null && activeNetworkInfo.isConnected) {
-
-                    return true
-                }
-            } catch (e: Exception) {
-                Log.e(TAG," ${e.message}")
-            }
-        }
-        return false
-
-
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiver(NetworkBrodcastReceiver())
     }
 }
 
